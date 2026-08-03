@@ -24,4 +24,4 @@ If you use AdvTG in your research, please cite the following paper:
 ```
 
 If you have any questions regarding the dataset, implementation, or framework, please feel free to contact:
-sunpeishuai@iie.ac.cn
+sunpeishuai20@mails.ucas.edu.cn
