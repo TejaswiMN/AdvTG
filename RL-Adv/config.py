@@ -3,10 +3,10 @@ import torch
 from trl import PPOConfig
 
 # Environment variables
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
-os.environ['HTTP_PROXY'] = '127.0.0.1:7890'
-os.environ['HTTPS_PROXY'] = '127.0.0.1:7890'
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+# os.environ['HTTP_PROXY'] = '127.0.0.1:7890'
+# os.environ['HTTPS_PROXY'] = '127.0.0.1:7890'
 os.environ["NCCL_P2P_DISABLE"] = "1"
 os.environ["NCCL_IB_DISABLE"] = "1"
 

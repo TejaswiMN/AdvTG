@@ -1,11 +1,11 @@
 import os
 import torch
 
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 # 设置代理环境变量
-os.environ['HTTP_PROXY'] = '127.0.0.1:7890'
-os.environ['HTTPS_PROXY'] = '127.0.0.1:7890'
+# os.environ['HTTP_PROXY'] = '127.0.0.1:7890'
+# os.environ['HTTPS_PROXY'] = '127.0.0.1:7890'
 
 
 major_version, minor_version = torch.cuda.get_device_capability()
@@ -143,7 +143,7 @@ trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
     train_dataset = dataset,
-    eval_dataset = dataset.select(range(20000,20100)),
+    eval_dataset = dataset.select(range(min(100, len(dataset)))),
     dataset_text_field = "text",
     max_seq_length = max_seq_length,
     dataset_num_proc = 2,
