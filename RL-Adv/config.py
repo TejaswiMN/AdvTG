@@ -14,7 +14,7 @@ os.environ["NCCL_IB_DISABLE"] = "1"
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # Model paths
-model_name_or_path = "your LLM's path"
+model_name_or_path = "/content/drive/MyDrive/MLSecResearch/code/model/ppo_model/Text/100"
 
 # Features dictionary
 features_dict = {"Image": "../model/imgae_model_configs.pkl", "Text": "../model/model_configs.pkl"}
