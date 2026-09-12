@@ -77,7 +77,8 @@ def train_custom_model(model, model_name, train_dataset, eval_dataset, training_
     loss_fn = nn.CrossEntropyLoss()
 
     # Training loop
-    for epoch in range(training_args.num_train_epochs):
+    # TrainingArguments stores num_train_epochs as a float
+    for epoch in range(int(training_args.num_train_epochs)):
         model.train()
         for batch in train_dataloader:
             inputs = batch['input_ids'].to(device)

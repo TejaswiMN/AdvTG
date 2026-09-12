@@ -61,8 +61,10 @@ def setup_models(model_name, device, load_in_4bit=True):
     Returns:
         tuple: (ppo_model, ref_model, tokenizer)
     """
-    quantization_config = BitsAndBytesConfig(load_in_4bit=load_in_4bit)
-    
+    # Only build a bitsandbytes config when 4-bit is actually requested; passing a
+    # load_in_4bit=False config still drags in the quantization path.
+    quantization_config = BitsAndBytesConfig(load_in_4bit=True) if load_in_4bit else None
+
     # Load PPO model and reference model
     ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
         model_name, 
