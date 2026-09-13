@@ -24,8 +24,7 @@ import pickle
 
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from peft import PeftModel
+from transformers import AutoTokenizer
 from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
 from trl.core import LengthSampler
 
@@ -35,27 +34,30 @@ from data_utils import load_http_dataset, create_dataloader
 from model_utils import prepare_query_tensors, evaluate_responses
 from utils import set_seed, save_results, mkdir
 
-# The Stage-3 LoRA's base. Loading the pre-quantized 4-bit model needs no BitsAndBytesConfig
-# (its own config.json already declares the quantization); a fresh config is only used if the
-# base ever needs re-quantizing.
-BASE_4BIT = "unsloth/llama-3-8b-bnb-4bit"
+def _load_policy(adapter_dir, device, max_seq=2048):
+    """Load the Stage-3 Llama LoRA (or a PPO checkpoint) as a trl value-head PPO policy.
 
+    adapter_dir is the Stage-3 SFT LoRA (`model/llama_lora`) on a fresh run, or a saved PPO
+    checkpoint (`model/ppo_llama_ckpt`) on resume. A saved value head (`v_head.pt`) is restored
+    when present; on a fresh run the value head starts random (Stage 3 had none).
 
-def _load_policy(adapter_dir, device):
-    """Load a 4-bit Llama + LoRA adapter (from adapter_dir) wrapped with a PPO value head.
-
-    adapter_dir is either the Stage-3 SFT LoRA (`model/llama_lora`) on a fresh run, or a saved
-    PPO checkpoint (`model/ppo_llama_ckpt`) on resume. A saved value head (`v_head.pt`) is
-    restored when present; on a fresh run the value head starts random (Stage 3 had none).
+    Loaded via unsloth's FastLanguageModel — the same loader that trained it — because unsloth
+    globally patches transformers' Llama forward on import, and that patched fast path needs the
+    `max_seq_length` state only unsloth's loader sets (a plain AutoModelForCausalLM load then
+    hits `'LlamaForCausalLM' object has no attribute 'max_seq_length'`).
     """
-    base = AutoModelForCausalLM.from_pretrained(BASE_4BIT, device_map={"": 0})
-    peft_model = PeftModel.from_pretrained(base, adapter_dir, is_trainable=True)
-    model = AutoModelForCausalLMWithValueHead.from_pretrained(peft_model)
+    from unsloth import FastLanguageModel
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name=adapter_dir, max_seq_length=max_seq, dtype=None, load_in_4bit=True)
+    if hasattr(FastLanguageModel, "for_training"):
+        FastLanguageModel.for_training(model)          # ensure LoRA params are trainable for PPO
+    tokenizer.pad_token = tokenizer.eos_token
+    ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(model)
     vhead = os.path.join(adapter_dir, "v_head.pt")
     if os.path.exists(vhead):
-        model.v_head.load_state_dict(torch.load(vhead, map_location=device))
+        ppo_model.v_head.load_state_dict(torch.load(vhead, map_location=device))
         print(f"[load] restored value head from {vhead}")
-    return model
+    return ppo_model, tokenizer
 
 
 def _save_ckpt(ppo_trainer, tokenizer, ckpt_dir, step):
@@ -143,10 +145,7 @@ def run(steps=15, sample_size=256, feature_type="Text", batch_size=2,
     if steps_done >= steps:
         print(f"[skip] already trained {steps_done} >= {steps} steps; running eval only")
 
-    tokenizer = AutoTokenizer.from_pretrained(lora_dir)
-    tokenizer.pad_token = tokenizer.eos_token
-
-    ppo_model = _load_policy(adapter_dir, device)
+    ppo_model, tokenizer = _load_policy(adapter_dir, device)
     ppo_trainer = PPOTrainer(config, ppo_model, ref_model=None, tokenizer=tokenizer)
 
     model_configs = pickle.load(open(features_dict[feature_type], "rb"))
