@@ -46,9 +46,17 @@ def _load_policy(adapter_dir, device, max_seq=2048):
     `max_seq_length` state only unsloth's loader sets (a plain AutoModelForCausalLM load then
     hits `'LlamaForCausalLM' object has no attribute 'max_seq_length'`).
     """
+    import gc
     from unsloth import FastLanguageModel
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    # Force the whole 4-bit model onto GPU 0. Without this, unsloth's auto device_map can
+    # decide to offload layers to CPU ("Some modules are dispatched on the CPU or the disk"),
+    # which 4-bit can't do here. Gradient checkpointing keeps PPO's backward within the T4.
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=adapter_dir, max_seq_length=max_seq, dtype=None, load_in_4bit=True)
+        model_name=adapter_dir, max_seq_length=max_seq, dtype=None, load_in_4bit=True,
+        device_map={"": 0}, use_gradient_checkpointing="unsloth")
     if hasattr(FastLanguageModel, "for_training"):
         FastLanguageModel.for_training(model)          # ensure LoRA params are trainable for PPO
     tokenizer.pad_token = tokenizer.eos_token
