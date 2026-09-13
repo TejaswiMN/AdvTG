@@ -61,18 +61,26 @@ def setup_models(model_name, device, load_in_4bit=True):
     Returns:
         tuple: (ppo_model, ref_model, tokenizer)
     """
-    quantization_config = BitsAndBytesConfig(load_in_4bit=load_in_4bit)
-    
+    # Only build a bitsandbytes config when 4-bit is actually requested; passing a
+    # load_in_4bit=False config still drags in the quantization path.
+    quantization_config = BitsAndBytesConfig(load_in_4bit=True) if load_in_4bit else None
+
+    # GPT-NeoX models (e.g. pythia) are numerically unstable in fp16 and emit nan/inf
+    # logits at generation ("probability tensor contains inf, nan or element < 0"),
+    # especially on a T4 (no bf16). Use fp32 for the plain fp16 policy; keep fp16 only as
+    # the compute dtype when 4-bit quantization is active.
+    torch_dtype = torch.float16 if load_in_4bit else torch.float32
+
     # Load PPO model and reference model
     ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        model_name, 
-        torch_dtype=torch.float16,
+        model_name,
+        torch_dtype=torch_dtype,
         quantization_config=quantization_config
     )
-    
+
     ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(
         model_name,
-        torch_dtype=torch.float16,
+        torch_dtype=torch_dtype,
         quantization_config=quantization_config
     )
     
