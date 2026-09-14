@@ -42,8 +42,8 @@ from utils import set_seed, save_results, mkdir
 def _load_pythia(model_name, device):
     """Plain HF causal LM policy + a frozen copy as the KL reference (both fp32: GPT-NeoX is
     unstable in fp16 -> nan logits at generation)."""
-    policy = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float32).to(device)
-    ref = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float32).to(device)
+    policy = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.float32).to(device)
+    ref = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.float32).to(device)
     ref.requires_grad_(False); ref.eval()
     tok = AutoTokenizer.from_pretrained(model_name)
     tok.pad_token = tok.eos_token
@@ -63,7 +63,7 @@ def _load_llama(adapter_dir, device, max_seq=1024):
         torch.cuda.empty_cache()
     base_name = PeftConfig.from_pretrained(adapter_dir).base_model_name_or_path
     base = AutoModelForCausalLM.from_pretrained(
-        base_name, device_map={"": 0}, torch_dtype=torch.float16)
+        base_name, device_map={"": 0}, dtype=torch.float16)
     base = prepare_model_for_kbit_training(base, use_gradient_checkpointing=True)
     policy = PeftModel.from_pretrained(base, adapter_dir, is_trainable=True)  # LoRA trainable for PPO
     tok = AutoTokenizer.from_pretrained(adapter_dir)
