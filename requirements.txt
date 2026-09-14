@@ -16,12 +16,12 @@ scikit-learn>=1.3      # DL/metrics.py  — accuracy / precision / recall / f1
 transformers>=4.46     # BERT tokenizer (Stage 2) + current SFT API (Stage 3)
 datasets>=2.20         # DL/data_processing.py, RL-Adv/data_utils.py  — `from datasets import Dataset`
 # ---------------------------------------------------------------------------
-# Stage 3 — LLM LoRA SFT (Llama-3-8B)
-unsloth                # fast 4-bit LoRA finetuner; pulls a torch-matched xformers + bitsandbytes
+# Stage 3 — LLM LoRA SFT (Llama-3-8B)  [plain peft + bitsandbytes; NO unsloth]
+# (unsloth was dropped: its import-time patching of transformers internals broke on new versions.)
 trl>=0.11              # SFTTrainer + SFTConfig (Stage 3 ONLY). PPO is hand-rolled — no trl-PPO dependency.
-peft>=0.12             # LoRA adapters
+peft>=0.12             # 4-bit QLoRA adapters; also loads the Stage-3 LoRA as the Stage-4b PPO policy
 bitsandbytes>=0.43     # 4-bit quantization
-accelerate>=0.34       # transformers / unsloth training backend
+accelerate>=0.34       # transformers training backend
 # ---------------------------------------------------------------------------
 # Stage 4 — PPO adversarial generation (RL-Adv/ppo_core.py)
 # Hand-rolled PPO loop: uses only torch + the frozen Stage-2 detectors as the reward.

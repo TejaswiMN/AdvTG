@@ -50,21 +50,25 @@ def _load_pythia(model_name, device):
     return policy, ref, tok, False   # is_peft=False
 
 
-def _load_llama(adapter_dir, device, max_seq=2048):
-    """Stage-3 Llama LoRA as a 4-bit PPO policy via unsloth. The KL reference is the SAME model
-    with the adapter disabled (no second 8B copy — critical on a 14.5 GB T4)."""
+def _load_llama(adapter_dir, device, max_seq=1024):
+    """Stage-3 Llama LoRA as a 4-bit PPO policy via plain peft + bitsandbytes (no unsloth). The KL
+    reference is the SAME model with the adapter disabled (PeftModel.disable_adapter()), so no
+    second 8B copy is loaded — critical on a 14.5 GB T4. `adapter_dir` is model/llama_lora (fresh
+    run) or a saved PPO checkpoint (resume); the 4-bit base is read from the adapter's PeftConfig."""
     import gc
-    from unsloth import FastLanguageModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from peft import PeftModel, PeftConfig, prepare_model_for_kbit_training
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    policy, tok = FastLanguageModel.from_pretrained(
-        model_name=adapter_dir, max_seq_length=max_seq, dtype=None, load_in_4bit=True,
-        device_map={"": 0}, use_gradient_checkpointing="unsloth")
-    if hasattr(FastLanguageModel, "for_training"):
-        FastLanguageModel.for_training(policy)   # keep LoRA params trainable
+    base_name = PeftConfig.from_pretrained(adapter_dir).base_model_name_or_path
+    base = AutoModelForCausalLM.from_pretrained(
+        base_name, device_map={"": 0}, torch_dtype=torch.float16)
+    base = prepare_model_for_kbit_training(base, use_gradient_checkpointing=True)
+    policy = PeftModel.from_pretrained(base, adapter_dir, is_trainable=True)  # LoRA trainable for PPO
+    tok = AutoTokenizer.from_pretrained(adapter_dir)
     tok.pad_token = tok.eos_token
-    return policy, None, tok, True    # is_peft=True; reference = disable_adapter()
+    return policy, None, tok, True    # is_peft=True; reference = policy.disable_adapter()
 
 
 # ---------------------------------------------------------------------------
