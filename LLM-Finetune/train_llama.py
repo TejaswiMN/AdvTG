@@ -142,7 +142,7 @@ model.to(device)
 # dataset_num_proc) live on SFTConfig, which subclasses TrainingArguments.
 trainer = SFTTrainer(
     model = model,
-    tokenizer = tokenizer,
+    processing_class = tokenizer,     # TRL renamed tokenizer -> processing_class
     train_dataset = dataset,
     eval_dataset = dataset.select(range(min(100, len(dataset)))),
     args = SFTConfig(
