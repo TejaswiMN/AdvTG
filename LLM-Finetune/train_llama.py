@@ -129,8 +129,7 @@ dataset = dataset.shuffle(seed=42)
 
 
 
-from trl import SFTTrainer
-from transformers import TrainingArguments
+from trl import SFTTrainer, SFTConfig
 from unsloth import is_bfloat16_supported
 
 # 设置环境变量以禁用 NCCL 中的 P2P 和 IB
@@ -139,16 +138,18 @@ os.environ['NCCL_IB_DISABLE'] = '1'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
+# Current TRL API: the SFT-specific args (dataset_text_field, max_seq_length, packing,
+# dataset_num_proc) live on SFTConfig, which subclasses TrainingArguments.
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
     train_dataset = dataset,
     eval_dataset = dataset.select(range(min(100, len(dataset)))),
-    dataset_text_field = "text",
-    max_seq_length = max_seq_length,
-    dataset_num_proc = 2,
-    packing = False, # Can make training 5x faster for short sequences.
-    args = TrainingArguments(
+    args = SFTConfig(
+        dataset_text_field = "text",
+        max_seq_length = max_seq_length,
+        dataset_num_proc = 2,
+        packing = False, # Can make training 5x faster for short sequences.
         per_device_train_batch_size = 8,
         gradient_accumulation_steps = 64,
         warmup_steps = 5,

@@ -1,6 +1,7 @@
 import os
 import torch
-from trl import PPOConfig
+# NOTE: no `from trl import PPOConfig` — Stage 4 PPO is hand-rolled in ppo_core.py and does not
+# depend on trl's PPO API (which changes across versions). trl is used only for Stage 3 SFT.
 
 # Environment variables
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -19,20 +20,14 @@ model_name_or_path = "EleutherAI/pythia-160m"
 # Features dictionary
 features_dict = {"Image": "../model/imgae_model_configs.pkl", "Text": "../model/model_configs.pkl"}
 
-# PPO Configuration
-def create_ppo_config():
-    return PPOConfig(
-        is_peft_model=True,
-        model_name=model_name_or_path,
-        learning_rate=1.41e-5,
-        batch_size=4,
-        mini_batch_size=1,
-        gradient_accumulation_steps=4,
-        use_score_scaling=True,  # scaling
-        use_score_norm=True,  # normalization
-        score_clip=1,
-        log_with="wandb"
-    )
+# PPO hyperparameters (read/overridable as ppo_core.train_ppo(...) args; kept here as the
+# tuning surface). The hand-rolled PPO in ppo_core.py uses these defaults.
+PPO_LEARNING_RATE = 1.41e-5
+PPO_BATCH_SIZE    = 4
+PPO_EPOCHS        = 4       # PPO-clip inner epochs per batch
+PPO_KL_BETA       = 0.2     # KL penalty vs the frozen reference (SFT/base policy)
+PPO_SCORE_CLIP    = 1.0     # clamp on whitened advantage (was use_score_scaling/norm + score_clip)
+PPO_CLIP_EPS      = 0.2     # PPO ratio clip epsilon
 
 # Generation configurations
 sent_kwargs = {
