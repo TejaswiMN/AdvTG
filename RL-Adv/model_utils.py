@@ -1,11 +1,10 @@
 import os
 import torch
 import pickle
-from transformers import AutoTokenizer, BitsAndBytesConfig
-from trl import AutoModelForCausalLMWithValueHead
-from trl.core import LengthSampler
-import torch.nn.functional as F
 from utils import get_label, replace_traffic_type, mkdir
+# NOTE: no trl imports here. Stage 4 PPO is hand-rolled in ppo_core.py, so this module stays
+# framework-light — it only loads the detector configs and builds reward/query tensors. The old
+# trl value-head `setup_models()` was removed with the classic-trl PPO path.
 
 def load_model_configs(feature_type, features_dict=None):
     """
@@ -48,47 +47,6 @@ def select_feature_model_type(features_dict):
         except:
             print(f"Please input Image or Text")
             continue
-
-def setup_models(model_name, device, load_in_4bit=True):
-    """
-    Set up PPO model and reference model.
-    
-    Args:
-        model_name: Name or path of the model
-        device: Torch device
-        load_in_4bit: Whether to load model in 4-bit quantization
-        
-    Returns:
-        tuple: (ppo_model, ref_model, tokenizer)
-    """
-    # Only build a bitsandbytes config when 4-bit is actually requested; passing a
-    # load_in_4bit=False config still drags in the quantization path.
-    quantization_config = BitsAndBytesConfig(load_in_4bit=True) if load_in_4bit else None
-
-    # GPT-NeoX models (e.g. pythia) are numerically unstable in fp16 and emit nan/inf
-    # logits at generation ("probability tensor contains inf, nan or element < 0"),
-    # especially on a T4 (no bf16). Use fp32 for the plain fp16 policy; keep fp16 only as
-    # the compute dtype when 4-bit quantization is active.
-    torch_dtype = torch.float16 if load_in_4bit else torch.float32
-
-    # Load PPO model and reference model
-    ppo_model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        model_name,
-        torch_dtype=torch_dtype,
-        quantization_config=quantization_config
-    )
-
-    ref_model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        model_name,
-        torch_dtype=torch_dtype,
-        quantization_config=quantization_config
-    )
-    
-    # Load tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    tokenizer.pad_token = tokenizer.eos_token
-    
-    return ppo_model, ref_model, tokenizer
 
 def prepare_query_tensors(batch, tokenizer, device, query_max_length=128):
     """

@@ -1,64 +1,29 @@
-# =============================================================================
-# AdvTG — pinned dependencies for the full 4-stage pipeline
-# Target environment: Python 3.11, single NVIDIA GPU (Colab T4 works), CUDA 12.1.
-#   - Python 3.13 (current Colab default) CANNOT build this stack — use 3.11.
-#   - The paper's testbed was Ubuntu 22.04.1 + Python 3.11 + an RTX 4090.
+# AdvTG — modernized dependencies (current stack; stock Colab GPU; Python 3.11–3.13).
 #
-# This is the SAME stack the notebook's "Install" cell uses. Every stage shares it,
-# so the whole notebook runs in one kernel with no restarts.
+# One-shot install:  pip install -r requirements.txt
+# No pins forcing the 2024 stack, no --no-deps, no torch downgrade, no kernel restarts.
 #
-# ------------------------------------------------------------------------------
-# HOW TO INSTALL — order and flags matter, so do NOT `pip install -r` this blindly.
-# Run these three commands in order (this is exactly what the notebook does):
+# torch / torchvision: PROVIDED BY THE RUNTIME. Colab ships a current CUDA build, and unsloth
+# resolves the rest of the GPU stack (xformers/bitsandbytes) to match it — so do NOT pin or
+# downgrade torch here. Outside Colab, install a CUDA torch first, e.g.:
+#     pip install torch torchvision
 #
-#   pip install -r requirements.txt
-#   pip install "torch==2.3.1" "torchvision==0.18.1"      # re-assert torch AFTER the above
-#   pip install --no-deps "xformers==0.0.26.post1"
-#
-# Why the last two are separate:
-#   * torch 2.3.1 must be (re)installed WITH its deps so it pulls the matching CUDA
-#     runtime (cuDNN 8 + triton 2.3.1). Colab ships torch 2.6; this downgrades it.
-#     Skipping its deps gives "libcudnn.so.8: cannot open shared object file".
-#   * xformers 0.0.26.post1 declares a hard `torch==2.3.0` pin. Installed normally it
-#     drags torch back to 2.3.0; --no-deps keeps our 2.3.1 (ABI-compatible within 2.3.x).
-# =============================================================================
-
-
-# ---- Stage 1 — Dataset (gen_synthetic_data.py) -----------------------------
-# NOTHING required. It uses only the Python standard library
-# (argparse, base64, json, os, random, string). No GPU, no internet.
-# (The optional CIC-IDS2017 path instead needs: kaggle + tshark + build_train_data.py.)
-
-
-# ---- Stage 2 — Detector training (DL/) -------------------------------------
-# Token-level (TextCNN / CNN-LSTM / DNN) + image detectors; writes model_configs pickles.
-transformers==4.44.2       # BERT tokenizer + TrainingArguments; also the version Stages 3/4 need
-datasets==2.21.0           # DL/data_processing.py: `from datasets import Dataset`
-scikit-learn>=1.3.0        # DL/metrics.py: accuracy / precision / recall / f1
-# torch + numpy are also required here but are pinned in the shared section below.
-# (torch is version-agnostic for Stage 2 — it works on any 2.x — but we pin 2.3.1 so the
-#  whole notebook shares one stack; numpy comes transitively, resolves to 1.26.x.)
-
-
-# ---- Stage 3 — LLM finetuning (Unsloth LoRA SFT of Llama-3-8B) --------------
-unsloth==2024.8            # the finetuner. Constrains the rest: needs trl<0.9, xformers<0.0.27, torch<=2.3
-trl==0.8.6                 # SFTTrainer (Stage 3) AND classic PPOTrainer (Stage 4). <0.9 for unsloth 2024.8
-peft>=0.12.0               # LoRA adapters
-bitsandbytes==0.43.1       # 4-bit quantization. Newer bnb needs torch>=2.4 (torch.library.register_fake)
-accelerate==0.33.0         # newer accelerate's dispatch_model calls model.to() on a 4-bit model -> error
-# xformers==0.0.26.post1   # unsloth's attention backend — install LAST with --no-deps (see header)
-
-
-# ---- Stage 4 — PPO adversarial generation (RL-Adv/) ------------------------
-# NO extra packages: reuses trl 0.8.6 (classic PPOTrainer) + transformers 4.44.2 + the
-# shared torch/accelerate/bitsandbytes above. The PPO policy (pythia-160m, or the Stage-3
-# Llama LoRA) is downloaded at runtime, not pip-installed.
-
-
-# ---- Shared GPU core (all stages that touch torch) -------------------------
-# Installed via the two explicit commands in the header (NOT here) because of the
-# CUDA-deps / --no-deps handling described above:
-#   torch==2.3.1
-#   torchvision==0.18.1
-#   xformers==0.0.26.post1   (--no-deps)
-# torch 2.3.1 also pulls: triton==2.3.1 and the nvidia-*-cu12 CUDA 12.1 runtime (incl. cuDNN 8).
+# ---------------------------------------------------------------------------
+# Stage 1 — Dataset (gen_synthetic_data.py): nothing required (pure Python stdlib).
+# ---------------------------------------------------------------------------
+# Stage 2 — Detectors (DL/)
+scikit-learn>=1.3      # DL/metrics.py  — accuracy / precision / recall / f1
+transformers>=4.46     # BERT tokenizer (Stage 2) + current SFT API (Stage 3)
+datasets>=2.20         # DL/data_processing.py, RL-Adv/data_utils.py  — `from datasets import Dataset`
+# ---------------------------------------------------------------------------
+# Stage 3 — LLM LoRA SFT (Llama-3-8B)  [plain peft + bitsandbytes; NO unsloth]
+# (unsloth was dropped: its import-time patching of transformers internals broke on new versions.)
+trl>=0.11              # SFTTrainer + SFTConfig (Stage 3 ONLY). PPO is hand-rolled — no trl-PPO dependency.
+peft>=0.12             # 4-bit QLoRA adapters; also loads the Stage-3 LoRA as the Stage-4b PPO policy
+bitsandbytes>=0.43     # 4-bit quantization
+accelerate>=0.34       # transformers training backend
+# ---------------------------------------------------------------------------
+# Stage 4 — PPO adversarial generation (RL-Adv/ppo_core.py)
+# Hand-rolled PPO loop: uses only torch + the frozen Stage-2 detectors as the reward.
+# No extra packages, and deliberately NO trl PPOTrainer (that API churns across versions).
+# ---------------------------------------------------------------------------
